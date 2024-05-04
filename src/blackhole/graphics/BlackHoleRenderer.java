@@ -7,6 +7,8 @@ import arc.graphics.gl.*;
 import arc.math.*;
 import arc.struct.*;
 import arc.util.*;
+import arc.util.pooling.Pool;
+import arc.util.pooling.Pools;
 import mindustry.game.EventType.*;
 import mindustry.graphics.*;
 
@@ -25,6 +27,12 @@ public class BlackHoleRenderer{
 
     private FrameBuffer buffer;
 
+    private static final float[][] initHoles = new float[510][];
+    private static final float[][] initColors = new float[510][];
+    //private static final Pool<BlackHoleZone> zonePool = Pools.get(BlackHoleZone.class, BlackHoleZone::new);
+    //private static final Pool<BlackHoleStar> starPool = Pools.get(BlackHoleStar.class, BlackHoleStar::new);
+
+
     protected BlackHoleRenderer(boolean advanced){
         BHShaders.createBlackHoleShaders();
         advanced(advanced);
@@ -40,6 +48,12 @@ public class BlackHoleRenderer{
 
     public static void init(boolean advanced){
         if(bRenderer == null) bRenderer = new BlackHoleRenderer(advanced);
+
+        if(!advanced) return;
+        for(int i = 0; i < 510; i++){
+            initHoles[i] = new float[i * 4];
+            initColors[i] = new float[i * 4];
+        }
     }
 
     public static void toggleAdvanced(boolean advanced){
@@ -77,9 +91,10 @@ public class BlackHoleRenderer{
             buffer.end();
 
             if(zones.size >= BHShaders.maxCount) BHShaders.createBlackHoleShaders();
+            if(zones.size >= 510) return;
 
-            float[] blackholes = new float[zones.size * 4];
-            float[] colors = new float[zones.size * 4];
+            float[] blackholes = initHoles[zones.size];
+            float[] colors = initColors[zones.size];
             for(int i = 0; i < zones.size; i++){
                 BlackHoleZone zone = zones.get(i);
                 blackholes[i * 4] = zone.x;
@@ -112,6 +127,8 @@ public class BlackHoleRenderer{
                 buffer.blit(BHShaders.rimShader);
                 drawStars();
             }
+
+            //zonePool.freeAll(zones);
             zones.clear();
         });
     }
@@ -135,6 +152,7 @@ public class BlackHoleRenderer{
                 drawStars();
             }
 
+            //zonePool.freeAll(zones);
             zones.clear();
         });
     }
@@ -154,10 +172,10 @@ public class BlackHoleRenderer{
                 float cos1 = Mathf.cosDeg(i * space), cos2 = Mathf.cosDeg((i + 1) * space);
 
                 Fill.quad(
-                    zone.x + cos1 * zone.inRadius, zone.y + sin1 * zone.inRadius, c1,
-                    zone.x + cos2 * zone.inRadius, zone.y + sin2 * zone.inRadius, c1,
-                    zone.x + cos2 * rad, zone.y + sin2 * rad, c2,
-                    zone.x + cos1 * rad, zone.y + sin1 * rad, c2
+                        zone.x + cos1 * zone.inRadius, zone.y + sin1 * zone.inRadius, c1,
+                        zone.x + cos2 * zone.inRadius, zone.y + sin2 * zone.inRadius, c1,
+                        zone.x + cos2 * rad, zone.y + sin2 * rad, c2,
+                        zone.x + cos1 * rad, zone.y + sin1 * rad, c2
                 );
             }
         }
@@ -167,6 +185,8 @@ public class BlackHoleRenderer{
         for(BlackHoleStar star : stars){
             BHDrawf.drawStar(star.x, star.y, star.w, star.h, star.angleOffset, star.inColor, star.outColor);
         }
+
+        //starPool.freeAll(stars);
         stars.clear();
     }
 
@@ -184,24 +204,29 @@ public class BlackHoleRenderer{
 
         float res = Color.toFloatBits(color.r, color.g, color.b, 1);
 
-        zones.add(new BlackHoleZone(x, y, res, inRadius, outRadius));
+        zones.add(Pools.obtain(BlackHoleZone.class, BlackHoleZone::new).set(x, y, res, inRadius, outRadius));
     }
 
     private void addS(float x, float y, float w, float h, float angleOffset, Color in, Color out){
         if(w <= 0 || h <= 0) return;
 
-        stars.add(new BlackHoleStar(x, y, w, h, angleOffset, in.toFloatBits(), out.toFloatBits()));
+        stars.add(Pools.obtain(BlackHoleStar.class, BlackHoleStar::new).set(x, y, w, h, angleOffset, in.toFloatBits(), out.toFloatBits()));
     }
 
     private static class BlackHoleZone{
         float x, y, color, inRadius, outRadius;
 
-        public BlackHoleZone(float x, float y, float color, float inRadius, float outRadius){
+        public BlackHoleZone set(float x, float y, float color, float inRadius, float outRadius){
             this.x = x;
             this.y = y;
             this.color = color;
             this.inRadius = inRadius;
             this.outRadius = outRadius;
+            return this;
+        }
+
+        public BlackHoleZone(){
+
         }
     }
 
@@ -209,7 +234,7 @@ public class BlackHoleRenderer{
     private static class BlackHoleStar{
         float x, y, w, h, angleOffset, inColor, outColor;
 
-        public BlackHoleStar(float x, float y, float w, float h, float angleOffset, float inColor, float outColor){
+        public BlackHoleStar set(float x, float y, float w, float h, float angleOffset, float inColor, float outColor){
             this.x = x;
             this.y = y;
             this.w = w;
@@ -217,6 +242,11 @@ public class BlackHoleRenderer{
             this.angleOffset = angleOffset;
             this.inColor = inColor;
             this.outColor = outColor;
+            return this;
+        }
+
+        public BlackHoleStar(){
+
         }
     }
 }
